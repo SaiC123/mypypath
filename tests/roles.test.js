@@ -67,6 +67,67 @@ describe('isValidCode', () => {
   });
 });
 
+describe('inviteUrl', () => {
+  it('builds a link that carries the code', () => {
+    expect(R.inviteUrl('ABC234', 'https://www.mypypath.com'))
+      .toBe('https://www.mypypath.com/join.html?code=ABC234');
+  });
+
+  it('normalizes the code before putting it in the link', () => {
+    expect(R.inviteUrl('abc-234', 'https://x.test'))
+      .toBe('https://x.test/join.html?code=ABC234');
+  });
+
+  it('does not double the slash when the origin has a trailing one', () => {
+    expect(R.inviteUrl('ABC234', 'https://x.test/'))
+      .toBe('https://x.test/join.html?code=ABC234');
+  });
+
+  // A teacher handed a link that cannot work would put it on a whiteboard and
+  // find out from a room full of students. Refuse to build one.
+  it('returns nothing for a code that is not valid', () => {
+    ['', null, undefined, 'SHORT', 'ABC2345', 'ABC01I', 'A B C 2 3 4 5'].forEach((bad) => {
+      expect(R.inviteUrl(bad, 'https://x.test')).toBe('');
+    });
+  });
+});
+
+describe('codeFromQuery', () => {
+  it('reads the code out of a query string', () => {
+    expect(R.codeFromQuery('?code=ABC234')).toBe('ABC234');
+    expect(R.codeFromQuery('code=ABC234')).toBe('ABC234');
+  });
+
+  it('reads it out of a whole URL', () => {
+    expect(R.codeFromQuery('https://x.test/join.html?code=ABC234')).toBe('ABC234');
+  });
+
+  it('normalizes what it finds, so a pasted lowercase link still works', () => {
+    expect(R.codeFromQuery('?code=abc-234')).toBe('ABC234');
+    expect(R.codeFromQuery('?code=abc%20234')).toBe('ABC234');
+  });
+
+  it('ignores other parameters and the fragment', () => {
+    expect(R.codeFromQuery('?next=/progress.html&code=ABC234')).toBe('ABC234');
+    expect(R.codeFromQuery('?code=ABC234#anchor')).toBe('ABC234');
+    expect(R.codeFromQuery('?codex=ABC234')).toBe('');
+  });
+
+  // The page must treat a junk code as "no code" and ask for one, rather than
+  // sending a doomed lookup to Firestore on every opened link.
+  it('returns nothing when there is no usable code', () => {
+    ['', '?', '?code=', '?code=NOPE', '?code=ABC01I', null, undefined]
+      .forEach((bad) => expect(R.codeFromQuery(bad)).toBe(''));
+  });
+
+  it('round-trips with inviteUrl', () => {
+    // Not 'XYZ789': Z is not in the code alphabet, which excludes the
+    // whiteboard-ambiguous glyphs O/0, I/1, S/5 and Z.
+    const url = R.inviteUrl('XYW789', 'https://www.mypypath.com');
+    expect(R.codeFromQuery(url)).toBe('XYW789');
+  });
+});
+
 describe('generateCode', () => {
   it('produces a code that passes its own validator', () => {
     for (let i = 0; i < 200; i++) {

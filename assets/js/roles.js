@@ -48,6 +48,46 @@
     return CODE_RE.test(normalizeCode(raw));
   }
 
+  // Where an invite link lands. A code typed into a form and a code arriving in
+  // a link are the same credential; this is only a second way to carry it.
+  var INVITE_PATH = '/join.html';
+  var INVITE_PARAM = 'code';
+
+  // Both halves take their input as an argument rather than reading `location`,
+  // so they stay in the pure section of this file and need no DOM to test.
+
+  // Returns '' rather than a half-built URL for a code that is not valid: a
+  // teacher must never be handed a link that cannot work, and silently
+  // producing one is how an unjoinable link ends up on a whiteboard.
+  function inviteUrl(rawCode, origin) {
+    var code = normalizeCode(rawCode);
+    if (!isValidCode(code)) return '';
+    var base = String(origin || '').replace(/\/+$/, '');
+    return base + INVITE_PATH + '?' + INVITE_PARAM + '=' + code;
+  }
+
+  // The reverse, for the landing page. Accepts a full URL or a bare query
+  // string, because callers have `location.search` and tests have neither.
+  function codeFromQuery(search) {
+    var raw = String(search || '');
+    var at = raw.indexOf('?');
+    if (at !== -1) raw = raw.slice(at + 1);
+    var hash = raw.indexOf('#');
+    if (hash !== -1) raw = raw.slice(0, hash);
+    var found = '';
+    raw.split('&').forEach(function (pair) {
+      if (!pair) return;
+      var eq = pair.indexOf('=');
+      var key = eq === -1 ? pair : pair.slice(0, eq);
+      if (decodeURIComponent(key) !== INVITE_PARAM) return;
+      var value = eq === -1 ? '' : pair.slice(eq + 1);
+      try { found = decodeURIComponent(value.replace(/\+/g, ' ')); }
+      catch (e) { found = value; }
+    });
+    var code = normalizeCode(found);
+    return isValidCode(code) ? code : '';
+  }
+
   // `random` is injected so the generator is testable and so callers can pass
   // crypto.getRandomValues-backed randomness rather than Math.random.
   function generateCode(random) {
@@ -139,6 +179,10 @@
     isTeacher: isTeacher,
     normalizeCode: normalizeCode,
     isValidCode: isValidCode,
+    INVITE_PATH: INVITE_PATH,
+    INVITE_PARAM: INVITE_PARAM,
+    inviteUrl: inviteUrl,
+    codeFromQuery: codeFromQuery,
     generateCode: generateCode,
     cryptoRandom: cryptoRandom,
     validateJoin: validateJoin,
